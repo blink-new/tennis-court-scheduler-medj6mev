@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Calendar, Clock, Users, User, Trash2, AlertCircle } from 'lucide-react'
+import { Calendar, Clock, Users, User, Trash2, AlertCircle, Mail } from 'lucide-react'
+import { PlayerStats } from '@/components/PlayerStats'
+import { EmailNotifications } from '@/components/EmailNotifications'
 
 interface Booking {
   id: string
@@ -13,6 +15,7 @@ interface Booking {
   timeSlot: string
   players: string[]
   type: 'singles' | 'doubles'
+  date: string
 }
 
 const TIME_SLOTS = {
@@ -24,6 +27,7 @@ const COURTS = [1, 2, 3]
 
 function App() {
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [allBookings, setAllBookings] = useState<Booking[]>([])
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBooking, setEditingBooking] = useState<{
@@ -46,6 +50,24 @@ function App() {
     return month >= 9 || month <= 4
   }
 
+  // Load all bookings for statistics
+  const loadAllBookings = () => {
+    const allBookingsData: Booking[] = []
+    const keys = Object.keys(localStorage)
+    
+    keys.forEach(key => {
+      if (key.startsWith('tennis-bookings-')) {
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          const dateBookings = JSON.parse(saved)
+          allBookingsData.push(...dateBookings)
+        }
+      }
+    })
+    
+    setAllBookings(allBookingsData)
+  }
+
   // Load bookings from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`tennis-bookings-${selectedDate}`)
@@ -54,11 +76,16 @@ function App() {
     } else {
       setBookings([])
     }
+    
+    // Load all bookings for statistics
+    loadAllBookings()
   }, [selectedDate])
 
   // Save bookings to localStorage
   useEffect(() => {
     localStorage.setItem(`tennis-bookings-${selectedDate}`, JSON.stringify(bookings))
+    // Reload all bookings when current bookings change
+    loadAllBookings()
   }, [bookings, selectedDate])
 
   const getBooking = (court: number, timeSlot: string) => {
@@ -102,7 +129,8 @@ function App() {
         court: editingBooking.court,
         timeSlot: editingBooking.timeSlot,
         players: filteredPlayers,
-        type: editingBooking.type
+        type: editingBooking.type,
+        date: selectedDate
       }
 
       setBookings(prev => {
@@ -165,15 +193,18 @@ function App() {
                     className="w-auto"
                   />
                 </div>
-                <Button 
-                  variant="outline" 
-                  onClick={clearAllBookings}
-                  disabled={!isValidBookingDate(selectedDate)}
-                  className="flex items-center gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Clear All
-                </Button>
+                <div className="flex gap-2">
+                  <PlayerStats bookings={allBookings} />
+                  <Button 
+                    variant="outline" 
+                    onClick={clearAllBookings}
+                    disabled={!isValidBookingDate(selectedDate)}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear All
+                  </Button>
+                </div>
               </div>
             </div>
             <p className="text-muted-foreground">{formatDate(selectedDate)}</p>
@@ -251,7 +282,7 @@ function App() {
                     return (
                       <div
                         key={`${court}-${timeSlot}`}
-                        className={`p-3 border-2 border-dashed rounded-lg transition-colors min-h-[80px] flex items-center justify-center ${
+                        className={`p-3 border-2 border-dashed rounded-lg transition-colors min-h-[120px] flex items-center justify-center ${
                           isDateValid 
                             ? 'border-green-200 cursor-pointer hover:bg-green-50' 
                             : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-50'
@@ -259,15 +290,20 @@ function App() {
                         onClick={() => handleCellClick(court, timeSlot, 'singles')}
                       >
                         {booking ? (
-                          <div className="text-center">
+                          <div className="text-center space-y-2">
                             <div className={`font-medium text-sm ${isDateValid ? 'text-green-800' : 'text-gray-500'}`}>
                               {booking.players.filter(p => p.trim()).join(' vs ')}
                             </div>
-                            <Badge variant="secondary" className={`mt-1 text-xs ${
+                            <Badge variant="secondary" className={`text-xs ${
                               isDateValid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                             }`}>
                               Singles
                             </Badge>
+                            {isDateValid && (
+                              <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                                <EmailNotifications booking={booking} />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className={`text-sm opacity-60 ${isDateValid ? 'text-green-600' : 'text-gray-400'}`}>
@@ -298,7 +334,7 @@ function App() {
                     return (
                       <div
                         key={`${court}-${timeSlot}`}
-                        className={`p-3 border-2 border-dashed rounded-lg transition-colors min-h-[80px] flex items-center justify-center ${
+                        className={`p-3 border-2 border-dashed rounded-lg transition-colors min-h-[120px] flex items-center justify-center ${
                           isDateValid 
                             ? 'border-blue-200 cursor-pointer hover:bg-blue-50' 
                             : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-50'
@@ -306,15 +342,20 @@ function App() {
                         onClick={() => handleCellClick(court, timeSlot, 'doubles')}
                       >
                         {booking ? (
-                          <div className="text-center">
+                          <div className="text-center space-y-2">
                             <div className={`font-medium text-xs leading-tight ${isDateValid ? 'text-blue-800' : 'text-gray-500'}`}>
                               {booking.players.filter(p => p.trim()).join(' & ')}
                             </div>
-                            <Badge variant="secondary" className={`mt-1 text-xs ${
+                            <Badge variant="secondary" className={`text-xs ${
                               isDateValid ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
                             }`}>
                               Doubles
                             </Badge>
+                            {isDateValid && (
+                              <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                                <EmailNotifications booking={booking} />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className={`text-sm opacity-60 ${isDateValid ? 'text-blue-600' : 'text-gray-400'}`}>
